@@ -7,7 +7,7 @@ buildscript {
 }
 
 plugins {
-    id 'com.gradle.plugin-publish' version '1.1.0'
+    id 'com.gradle.plugin-publish' version '1.2.1'
     id 'maven-publish'
     id 'groovy'
     id 'idea'
@@ -27,14 +27,17 @@ repositories {
 }
 
 dependencies {
-    implementation 'de.flapdoodle.embed:de.flapdoodle.embed.mongo:4.7.2'
-    implementation 'org.mongodb:mongo-java-driver:3.12.14'
+    implementation 'de.flapdoodle.embed:de.flapdoodle.embed.mongo:4.12.6'
+    // Using 4.7 for maximal compatibility back to mongo 2.6 see https://www.mongodb.com/docs/drivers/java/sync/current/compatibility/
+    // On Ubuntu 22.04 some tests with mongo versions before 3.6 require libssl1.0.0
+    // you can get it from https://old-releases.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.0.0_1.0.2g-1ubuntu13_amd64.deb
+    implementation 'org.mongodb:mongodb-driver-sync:4.7.2'
 
     testImplementation 'org.spockframework:spock-core:2.3-groovy-3.0', {
         exclude module: 'groovy-all'
     }
     testImplementation 'org.littleshoot:littleproxy:1.1.2'
-    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.10.0'
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.10.2'
 }
 
 task javadocJar(type: Jar, dependsOn: javadoc) {

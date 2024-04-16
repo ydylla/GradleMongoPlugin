@@ -17,7 +17,7 @@ import spock.lang.TempDir
 
 class MongoPluginConfigSpec extends Specification {
 
-    def static final VERBOSE_LOGGING_SAMPLE = 'ismaster'
+    def static final VERBOSE_LOGGING_SAMPLE = 'isMaster'
 
 	@TempDir
 	File tmp

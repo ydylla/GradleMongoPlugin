@@ -1,7 +1,12 @@
 package com.sourcemuse.gradle.plugin
 
-import com.mongodb.*
-import com.mongodb.client.MongoDatabase
+import com.mongodb.ConnectionString
+import com.mongodb.MongoClientSettings
+import com.mongodb.MongoCredential
+import com.mongodb.MongoException
+import com.mongodb.WriteConcern
+import com.mongodb.client.MongoClient
+import com.mongodb.client.MongoClients
 import de.flapdoodle.embed.mongo.runtime.Mongod
 import org.bson.Document
 
@@ -20,13 +25,10 @@ class MongoUtils {
         }
     }
 
-    static MongoDatabase mongoDatabase(int port) {
-        def mongoClient = new MongoClient(LOOPBACK_ADDRESS, port)
-        mongoClient.getDatabase(DATABASE_NAME)
-    }
-
     static Document mongoServerStatus(int port = DEFAULT_MONGOD_PORT) {
-        mongoDatabase(port).runCommand(new Document('serverStatus', 1))
+        MongoClients.create("mongodb://${LOOPBACK_ADDRESS}:${port}").withCloseable {
+            return it.getDatabase(DATABASE_NAME).runCommand(new Document('serverStatus', 1))
+        }
     }
 
     static boolean mongoInstanceRunning(int port = DEFAULT_MONGOD_PORT) {
@@ -57,23 +59,19 @@ class MongoUtils {
     }
 
     static String getMongoVersionRunning(int port) {
-        try {
-            def mongoClient = new MongoClient(LOOPBACK_ADDRESS, port)
-            def result = mongoClient.getDatabase(DATABASE_NAME).runCommand(new Document('buildInfo', 1))
-            return result.version
-        } catch (Exception e) {
-            return 'none'
+        MongoClients.create("mongodb://${LOOPBACK_ADDRESS}:${port}").withCloseable {
+            return it.getDatabase(DATABASE_NAME).runCommand(new Document('buildInfo', 1)).version
         }
     }
 
     static boolean makeJournaledWrite() {
-        try {
-            def options = MongoClientOptions.builder().writeConcern(WriteConcern.JOURNALED).build()
-            def mongoClient = new MongoClient("${LOOPBACK_ADDRESS}:${DEFAULT_MONGOD_PORT}", options)
-            writeSampleObjectToDb(mongoClient)
+        def settings = MongoClientSettings.builder()
+          .writeConcern(WriteConcern.JOURNALED)
+          .applyConnectionString(new ConnectionString("mongodb://${LOOPBACK_ADDRESS}:${DEFAULT_MONGOD_PORT}"))
+          .build()
+        MongoClients.create(settings).withCloseable {
+            writeSampleObjectToDb(it)
             return true
-        } catch (Exception e) {
-            return false
         }
     }
 
@@ -85,16 +83,19 @@ class MongoUtils {
     }
 
     static boolean runMongoCommand(MongoCredential credential, Document cmd) {
-        ServerAddress addr = new ServerAddress("${LOOPBACK_ADDRESS}:${DEFAULT_MONGOD_PORT}")
 
-        def mongoClient = credential ?
-            new MongoClient(addr, credential, MongoClientOptions.builder().build()) :
-            new MongoClient(addr, MongoClientOptions.builder().build())
+        def settings = MongoClientSettings.builder()
+          .applyConnectionString(new ConnectionString("mongodb://${LOOPBACK_ADDRESS}:${DEFAULT_MONGOD_PORT}"))
+        if (credential) {
+            settings.credential(credential)
+        }
+
+        def mongoClient = MongoClients.create(settings.build())
 
         try {
             mongoClient.getDatabase('admin').runCommand(cmd)
         }
-        catch (MongoException e) {
+        catch (MongoException ignored) {
             return false
         }
         finally {

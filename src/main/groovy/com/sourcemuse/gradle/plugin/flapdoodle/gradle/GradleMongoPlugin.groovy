@@ -1,6 +1,6 @@
 package com.sourcemuse.gradle.plugin.flapdoodle.gradle
 
-import com.mongodb.MongoClient
+import com.mongodb.client.MongoClients
 import com.sourcemuse.gradle.plugin.GradleMongoPluginExtension
 import com.sourcemuse.gradle.plugin.flapdoodle.adapters.ProcessOutputFactory
 import com.sourcemuse.gradle.plugin.flapdoodle.adapters.VersionFactory
@@ -176,8 +176,9 @@ class GradleMongoPlugin implements Plugin<Project> {
         }
 
         try {
-            def mongoClient = new MongoClient(bindIp, port)
-            mongoClient.getDatabase('test').runCommand(new Document(buildinfo: 1))
+            MongoClients.create("mongodb://${bindIp}:${port}").withCloseable {
+                it.getDatabase('test').runCommand(new Document(buildinfo: 1))
+            }
         } catch (Throwable ignored) {
             return false
         }

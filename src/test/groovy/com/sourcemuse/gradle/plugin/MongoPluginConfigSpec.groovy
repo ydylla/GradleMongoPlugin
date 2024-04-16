@@ -1,19 +1,26 @@
 package com.sourcemuse.gradle.plugin
 
-import static com.sourcemuse.gradle.plugin.BuildScriptBuilder.*
-import static com.sourcemuse.gradle.plugin.MongoUtils.*
-
+import com.mongodb.MongoCredential
+import de.flapdoodle.embed.mongo.distribution.Version
 import org.bson.Document
 import org.gradle.testkit.runner.BuildResult
 import org.gradle.testkit.runner.GradleRunner
 import org.littleshoot.proxy.impl.DefaultHttpProxyServer
-
-import com.mongodb.MongoCredential
-
-import de.flapdoodle.embed.mongo.distribution.Version
 import spock.lang.Issue
 import spock.lang.Specification
 import spock.lang.TempDir
+
+import static com.sourcemuse.gradle.plugin.BuildScriptBuilder.DEFAULT_MONGOD_PORT
+import static com.sourcemuse.gradle.plugin.BuildScriptBuilder.MONGO_RUNNING_FLAG
+import static com.sourcemuse.gradle.plugin.BuildScriptBuilder.START_MANAGED_MONGO_DB_FOR_TEST
+import static com.sourcemuse.gradle.plugin.BuildScriptBuilder.START_MONGO_DB_FOR_TEST
+import static com.sourcemuse.gradle.plugin.MongoUtils.ensureMongoIsStopped
+import static com.sourcemuse.gradle.plugin.MongoUtils.getMongoVersionRunning
+import static com.sourcemuse.gradle.plugin.MongoUtils.makeJournaledWrite
+import static com.sourcemuse.gradle.plugin.MongoUtils.makeWriteWithTransaction
+import static com.sourcemuse.gradle.plugin.MongoUtils.mongoInstanceRunning
+import static com.sourcemuse.gradle.plugin.MongoUtils.mongoServerStatus
+import static com.sourcemuse.gradle.plugin.MongoUtils.runMongoCommand
 
 class MongoPluginConfigSpec extends Specification {
 
@@ -354,6 +361,17 @@ class MongoPluginConfigSpec extends Specification {
 
         then:
         noExceptionThrown()
+    }
+
+    def "transactions can be used"() {
+        setup:
+            // transactions require replica set & journaling
+            generate(buildScript.withReplicaSet("test").withJournalingEnabled().withMongoVersion("5.0.26"))
+        when:
+            runGradle(START_MONGO_DB_FOR_TEST)
+            makeWriteWithTransaction(DEFAULT_MONGOD_PORT)
+        then:
+            noExceptionThrown()
     }
 
     def cleanup() {

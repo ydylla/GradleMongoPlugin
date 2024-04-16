@@ -5,6 +5,7 @@ import com.mongodb.MongoClientSettings
 import com.mongodb.MongoCredential
 import com.mongodb.MongoException
 import com.mongodb.WriteConcern
+import com.mongodb.client.ClientSession
 import com.mongodb.client.MongoClient
 import com.mongodb.client.MongoClients
 import de.flapdoodle.embed.mongo.runtime.Mongod
@@ -100,6 +101,21 @@ class MongoUtils {
         }
         finally {
             mongoClient.close()
+        }
+        return true
+    }
+
+    static boolean makeWriteWithTransaction(int port) {
+        MongoClients.create("mongodb://${LOOPBACK_ADDRESS}:${port}").withCloseable {
+            try (ClientSession session = it.startSession()) {
+                session.startTransaction()
+
+                it.getDatabase(DATABASE_NAME)
+                  .getCollection("test")
+                  .insertOne(session, new Document("foo", "bar"))
+
+                session.commitTransaction()
+            }
         }
         return true
     }

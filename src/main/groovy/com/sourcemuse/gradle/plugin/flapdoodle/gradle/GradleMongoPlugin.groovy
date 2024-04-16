@@ -1,6 +1,8 @@
 package com.sourcemuse.gradle.plugin.flapdoodle.gradle
 
+import com.mongodb.MongoCommandException
 import com.mongodb.client.MongoClients
+import com.mongodb.client.MongoDatabase
 import com.sourcemuse.gradle.plugin.GradleMongoPluginExtension
 import com.sourcemuse.gradle.plugin.flapdoodle.adapters.ProcessOutputFactory
 import com.sourcemuse.gradle.plugin.flapdoodle.adapters.VersionFactory
@@ -31,6 +33,7 @@ import org.gradle.api.invocation.Gradle
 import org.gradle.api.tasks.TaskState
 
 import java.nio.file.Path
+import java.time.Instant
 import java.util.concurrent.atomic.AtomicInteger
 
 import static com.sourcemuse.gradle.plugin.flapdoodle.gradle.ManageProcessInstruction.CONTINUE_MONGO_PROCESS_WHEN_BUILD_PROCESS_STOPS
@@ -167,6 +170,13 @@ class GradleMongoPlugin implements Plugin<Project> {
         RunningMongodProcess running = builder.build().start(version).current()
         println 'Mongod started.'
         project.rootProject.mongoPortToProcessMap.put(pluginExtension.port, running)
+
+        if (pluginExtension.replicaSet != null) {
+            println 'Initializing replica set...'
+            setupReplicaSet(pluginExtension.bindIp, pluginExtension.port)
+            println 'Mongod is writable'
+        }
+
         return true
     }
 
@@ -200,6 +210,35 @@ class GradleMongoPlugin implements Plugin<Project> {
         }
     }
 
+    private static void setupReplicaSet(String host, int port) {
+        MongoClients.create("mongodb://${host}:${port}").withCloseable {
+            MongoDatabase adminDB = it.getDatabase("admin")
+
+            try {
+                adminDB.runCommand(new Document("replSetInitiate", new Document()))
+            } catch (MongoCommandException e) {
+                if (e.getErrorCode() != 23) { // ignore AlreadyInitialized errors
+                    throw e
+                }
+            }
+
+            // wait until replica set (this node) is writable
+            Instant stop = Instant.now().plusSeconds(10)
+            while (!adminDB.runCommand(new Document("isMaster", 1)).getBoolean("ismaster") && Instant.now().isBefore(stop)) {
+                try {
+                    //noinspection BusyWait
+                    Thread.sleep(100)
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e)
+                }
+            }
+
+            if (Instant.now().isAfter(stop)) {
+                throw new RuntimeException("Current node is not master/primary after 10s")
+            }
+        }
+    }
+
     private static Transition<MongodArguments> createMongoCommandOptions(GradleMongoPluginExtension pluginExtension) {
         ImmutableMongodArguments.Builder builder = MongodArguments.builder()
 
@@ -216,6 +255,10 @@ class GradleMongoPlugin implements Plugin<Project> {
             builder.syncDelay(pluginExtension.syncDelay)
         } else {
             builder.useDefaultSyncDelay(true)
+        }
+
+        if (pluginExtension.replicaSet != null) {
+            builder.putArgs("--replSet", pluginExtension.replicaSet)
         }
 
         if (pluginExtension.args != null && pluginExtension.args.size() > 0) {

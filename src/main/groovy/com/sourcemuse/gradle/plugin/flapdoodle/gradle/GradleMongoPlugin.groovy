@@ -16,10 +16,10 @@ import de.flapdoodle.embed.mongo.types.DatabaseDir
 import de.flapdoodle.embed.mongo.types.DistributionBaseUrl
 import de.flapdoodle.embed.process.config.DownloadConfig
 import de.flapdoodle.embed.process.io.directories.PersistentDir
-import de.flapdoodle.embed.process.net.HttpProxyFactory
 import de.flapdoodle.embed.process.runtime.Network
 import de.flapdoodle.embed.process.transitions.DownloadPackage
 import de.flapdoodle.embed.process.types.ProcessConfig
+import de.flapdoodle.net.ProxyFactory
 import de.flapdoodle.reverse.Transition
 import de.flapdoodle.reverse.transitions.Start
 import org.bson.Document
@@ -161,7 +161,7 @@ class GradleMongoPlugin implements Plugin<Project> {
               DownloadPackage.withDefaults()
               .withDownloadConfig(
                 DownloadConfig.defaults()
-                  .withProxyFactory(new HttpProxyFactory(pluginExtension.proxyHost, pluginExtension.proxyPort))
+                  .withProxyFactory(ProxyFactory.of(pluginExtension.proxyHost, pluginExtension.proxyPort))
               )
             )
         }

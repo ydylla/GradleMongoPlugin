@@ -32,6 +32,7 @@ import org.gradle.api.initialization.Settings
 import org.gradle.api.invocation.Gradle
 import org.gradle.api.tasks.TaskState
 
+import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicInteger
@@ -62,6 +63,7 @@ class GradleMongoPlugin implements Plugin<Project> {
     private static void configureTaskProperties(Project project) {
         project.extensions.create(PLUGIN_EXTENSION_NAME, GradleMongoPluginExtension)
         project.getRootProject().extensions.extraProperties.set("mongoPortToProcessMap", new HashMap<Integer, RunningMongodProcess>())
+        project.getRootProject().extensions.extraProperties.set("mongoPortToTempStorage", new HashMap<Integer, Path>())
     }
 
     private static void addStartManagedMongoDbTask(Project project) {
@@ -135,12 +137,18 @@ class GradleMongoPlugin implements Plugin<Project> {
             .initializedWith(ProcessConfig.defaults().withDaemonProcess(manageProcessInstruction == STOP_MONGO_PROCESS_WHEN_BUILD_PROCESS_STOPS))
         )
 
-        if (pluginExtension.storageLocation) {
-            builder.databaseDir(
-              Start.to(DatabaseDir.class)
-                .initializedWith(DatabaseDir.of(Path.of(pluginExtension.storageLocation)))
-            )
+        Path storageLocation
+        if (pluginExtension.storageLocation == GradleMongoPluginExtension.EPHEMERAL_TEMPORARY_FOLDER) {
+            storageLocation = Files.createTempDirectory("$PLUGIN_EXTENSION_NAME-")
+            storageLocation.toFile().deleteOnExit()
+            project.rootProject.mongoPortToTempStorage.put(pluginExtension.port, storageLocation)
+        } else {
+            storageLocation = Path.of(pluginExtension.storageLocation)
         }
+        builder.databaseDir(
+          Start.to(DatabaseDir.class)
+            .initializedWith(DatabaseDir.of(storageLocation))
+        )
 
         if (pluginExtension.artifactStorePath) {
             builder.persistentBaseDir(
@@ -290,10 +298,11 @@ class GradleMongoPlugin implements Plugin<Project> {
     private static void stopMongoDb(Project project) {
         def port = project."$PLUGIN_EXTENSION_NAME".port as Integer
         def proc = project.rootProject.mongoPortToProcessMap.remove(port) as RunningMongodProcess
-        stopMongoDb(port, proc)
+        def tempStorage = project.rootProject.mongoPortToTempStorage.remove(port) as Path
+        stopMongoDb(port, proc, tempStorage)
     }
 
-    private static void stopMongoDb(int port, RunningMongodProcess proc) {
+    private static void stopMongoDb(int port, RunningMongodProcess proc, Path tempStorage) {
         println "Shutting-down Mongod on port ${port}."
         def force = (proc == null)
 
@@ -305,6 +314,10 @@ class GradleMongoPlugin implements Plugin<Project> {
 
         if (force && !de.flapdoodle.embed.mongo.runtime.Mongod.sendShutdown(InetAddress.getLoopbackAddress(), port)) {
             println "Could not shut down mongo, is access control enabled?"
+        }
+
+        if (tempStorage != null) {
+            tempStorage.deleteDir()
         }
     }
 
@@ -356,7 +369,7 @@ class GradleMongoPlugin implements Plugin<Project> {
 						synchronized (rootProject) {
 							def mongoDependencyCount = rootProject.mongoTaskDependenciesCountByPort.get(port).decrementAndGet()
 							if (mongoDependencyCount == 0 && rootProject.mongoInstancesStartedDuringBuild.get(port)) {
-								stopMongoDb(port, rootProject.mongoPortToProcessMap.remove(port))
+								stopMongoDb(port, rootProject.mongoPortToProcessMap.remove(port), rootProject.mongoPortToTempStorage.remove(port))
 							}
 						}
 					}

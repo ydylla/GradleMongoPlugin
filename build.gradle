@@ -17,7 +17,7 @@ plugins {
 }
 
 group = 'com.sourcemuse.gradle.plugin'
-version = '2.1.2-SNAPSHOT'
+version = '2.1.3-SNAPSHOT'
 
 java {
   sourceCompatibility = JavaVersion.VERSION_11
@@ -29,7 +29,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'de.flapdoodle.embed:de.flapdoodle.embed.mongo:4.21.0'
+    implementation 'de.flapdoodle.embed:de.flapdoodle.embed.mongo:4.33.0'
     // Using 4.7 for maximal compatibility back to mongo 2.6 see https://www.mongodb.com/docs/drivers/java/sync/current/compatibility/
     // On Ubuntu 22.04 some tests with mongo versions before 3.6 require libssl1.0.0
     // you can get it from https://old-releases.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.0.0_1.0.2g-1ubuntu13_amd64.deb

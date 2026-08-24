@@ -17,11 +17,11 @@ plugins {
 }
 
 group = 'com.sourcemuse.gradle.plugin'
-version = '2.1.3-SNAPSHOT'
+version = '2.2.0-SNAPSHOT'
 
 java {
-  sourceCompatibility = JavaVersion.VERSION_11
-  targetCompatibility = JavaVersion.VERSION_11
+  sourceCompatibility = JavaVersion.VERSION_21
+  targetCompatibility = JavaVersion.VERSION_21
 }
 
 repositories {
@@ -35,11 +35,12 @@ dependencies {
     // you can get it from https://old-releases.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.0.0_1.0.2g-1ubuntu13_amd64.deb
     implementation 'org.mongodb:mongodb-driver-sync:4.7.2'
 
-    testImplementation 'org.spockframework:spock-core:2.3-groovy-3.0', {
+    testImplementation 'org.spockframework:spock-core:2.4-groovy-4.0', {
         exclude module: 'groovy-all'
     }
     testImplementation 'org.littleshoot:littleproxy:1.1.2'
-    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.10.2'
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:6.1.3'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:6.1.3'
 }
 
 tasks.register("javadocJar", Jar) {

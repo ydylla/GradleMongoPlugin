@@ -9,6 +9,7 @@ import org.littleshoot.proxy.impl.DefaultHttpProxyServer
 import spock.lang.Issue
 import spock.lang.Specification
 import spock.lang.TempDir
+import spock.util.concurrent.PollingConditions
 
 import static com.sourcemuse.gradle.plugin.BuildScriptBuilder.DEFAULT_MONGOD_PORT
 import static com.sourcemuse.gradle.plugin.BuildScriptBuilder.MONGO_RUNNING_FLAG
@@ -336,7 +337,9 @@ class MongoPluginConfigSpec extends Specification {
 
         then:
         noExceptionThrown()
-        !mongoInstanceRunning()
+        new PollingConditions(timeout: 5).eventually {
+            !mongoInstanceRunning()
+        }
     }
 
     def 'parameters can be set'() {

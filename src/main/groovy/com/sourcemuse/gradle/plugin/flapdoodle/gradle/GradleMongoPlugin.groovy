@@ -115,7 +115,7 @@ class GradleMongoPlugin implements Plugin<Project> {
         return startMongoDb(pluginExtension, project, manageProcessInstruction)
     }
 
-    private static boolean startMongoDb(GradleMongoPluginExtension pluginExtension, Project project, ManageProcessInstruction manageProcessInstruction) {
+    private static synchronized boolean startMongoDb(GradleMongoPluginExtension pluginExtension, Project project, ManageProcessInstruction manageProcessInstruction) {
         if (mongoInstanceAlreadyRunning(pluginExtension.bindIp, pluginExtension.port)) {
             println "Mongo instance already running at ${pluginExtension.bindIp}:${pluginExtension.port}. Reusing."
             return false

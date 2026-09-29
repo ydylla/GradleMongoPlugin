@@ -338,15 +338,18 @@ class GradleMongoPlugin implements Plugin<Project> {
 
     private static void configureTasksRequiringMongoDb(Project project) {
         project.tasks.each {
+            def rootProject = project.getRootProject()
             def task = it
             if (task.runWithMongoDb) {
-                def rootProject = project.getRootProject()
-                def mergedPluginExtension = getTaskSpecificMongoConfiguration(task, project)
-                def port = mergedPluginExtension.port
+                synchronized (rootProject) {
+                    ensureMongoTaskTrackingPropertiesAreSet(rootProject)
+                    rootProject.tasksRequiringMongo.add(task.getPath())
+                }
 
                 task.doFirst {
+                    def mergedPluginExtension = getTaskSpecificMongoConfiguration(task, project)
+                    def port = mergedPluginExtension.port
                     synchronized (rootProject) {
-                        ensureMongoTaskTrackingPropertiesAreSet(rootProject)
                         def mongoDependencyCount = rootProject.mongoTaskDependenciesCountByPort.get(port).getAndIncrement()
                         def mongoStartedByTask = startMongoDb(mergedPluginExtension, project, STOP_MONGO_PROCESS_WHEN_BUILD_PROCESS_STOPS)
                         if (mongoDependencyCount == 0) {
@@ -357,34 +360,36 @@ class GradleMongoPlugin implements Plugin<Project> {
             }
         }
 
-		project.gradle.addBuildListener(new BuildListener() {
-			@Override
-			void buildFinished(BuildResult buildResult) {
-				buildResult.gradle.rootProject.tasks.each {
-					TaskState state = it.state
-					if (it.runWithMongoDb && state.didWork) {
-						def rootProject = it.project
-						def mergedPluginExtension = getTaskSpecificMongoConfiguration(it, project)
-						def port = mergedPluginExtension.port
-						synchronized (rootProject) {
-							def mongoDependencyCount = rootProject.mongoTaskDependenciesCountByPort.get(port).decrementAndGet()
-							if (mongoDependencyCount == 0 && rootProject.mongoInstancesStartedDuringBuild.get(port)) {
-								stopMongoDb(port, rootProject.mongoPortToProcessMap.remove(port), rootProject.mongoPortToTempStorage.remove(port))
-							}
-						}
-					}
-				}
-			}
+		    project.gradle.addBuildListener(new BuildListener() {
+            @Override
+            void buildFinished(BuildResult buildResult) {
+                buildResult.gradle.getTaskGraph().getAllTasks().each {
+                    def rootProject = it.project.getRootProject()
+                    TaskState state = it.state
 
-			@Override
-			void projectsEvaluated(Gradle gradle) {}
+                    synchronized (rootProject) {
+                        ensureMongoTaskTrackingPropertiesAreSet(rootProject)
+                        if (rootProject.tasksRequiringMongo.contains(it.getPath()) && state.didWork) {
+                            def mergedPluginExtension = getTaskSpecificMongoConfiguration(it, project)
+                            def port = mergedPluginExtension.port
+                            def mongoDependencyCount = rootProject.mongoTaskDependenciesCountByPort.get(port).decrementAndGet()
+                            if (mongoDependencyCount == 0 && rootProject.mongoInstancesStartedDuringBuild.get(port)) {
+                                stopMongoDb(port, rootProject.mongoPortToProcessMap.remove(port), rootProject.mongoPortToTempStorage.remove(port))
+                            }
+                        }
+                    }
+				        }
+			      }
 
-			@Override
-			void projectsLoaded(Gradle gradle) {}
+            @Override
+            void projectsEvaluated(Gradle gradle) {}
 
-			@Override
-			void settingsEvaluated(Settings gradle) {}
-		})
+            @Override
+            void projectsLoaded(Gradle gradle) {}
+
+			      @Override
+			      void settingsEvaluated(Settings gradle) {}
+		    })
     }
 
     private static void ensureMongoTaskTrackingPropertiesAreSet(Project rootProject) {
@@ -395,6 +400,7 @@ class GradleMongoPlugin implements Plugin<Project> {
             rootProject.extensions.extraProperties.set("mongoInstancesStartedDuringBuild", new HashMap<>().withDefault {
                 false
             })
+            rootProject.extensions.extraProperties.set("tasksRequiringMongo", new HashSet())
         }
     }
 
